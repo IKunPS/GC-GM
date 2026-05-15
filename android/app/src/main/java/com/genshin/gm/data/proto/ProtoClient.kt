@@ -1,5 +1,6 @@
 package com.genshin.gm.data.proto
 
+import com.genshin.gm.data.local.DeviceManager
 import com.genshin.gm.proto.*
 import com.google.protobuf.ByteString
 import com.google.protobuf.MessageLite
@@ -14,8 +15,14 @@ import java.util.concurrent.TimeUnit
 /**
  * Protobuf client for communicating with the Spring Boot backend.
  * All requests go through POST /api/proto using ProtoEnvelope.
+ *
+ * 当传入 [deviceManager] 时（推荐），每次请求都会自动附带设备指纹
+ * （device_id / model / brand / system / app version），供后端落库使用。
  */
-class ProtoClient(private val baseUrl: String) {
+class ProtoClient(
+    private val baseUrl: String,
+    private val deviceManager: DeviceManager? = null,
+) {
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -31,12 +38,24 @@ class ProtoClient(private val baseUrl: String) {
 
     private val protoMediaType = "application/x-protobuf".toMediaType()
 
+    private fun buildDeviceInfo(): DeviceInfo? {
+        val dm = deviceManager ?: return null
+        return DeviceInfo.newBuilder()
+            .setDeviceId(dm.getDeviceId())
+            .setDeviceModel(dm.getDeviceModel())
+            .setDeviceBrand(dm.getDeviceBrand())
+            .setSystemVersion(dm.getSystemVersion())
+            .setAppVersion(dm.getAppVersion())
+            .build()
+    }
+
     private suspend fun sendProto(action: String, payload: ByteArray): ByteArray =
         withContext(Dispatchers.IO) {
-            val envelope = ProtoEnvelope.newBuilder()
+            val envelopeBuilder = ProtoEnvelope.newBuilder()
                 .setAction(action)
                 .setPayload(ByteString.copyFrom(payload))
-                .build()
+            buildDeviceInfo()?.let { envelopeBuilder.setDevice(it) }
+            val envelope = envelopeBuilder.build()
 
             val request = Request.Builder()
                 .url("$baseUrl/api/proto")

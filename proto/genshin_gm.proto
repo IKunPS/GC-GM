@@ -269,10 +269,22 @@ message ResourceUpdateInfo {
   string download_url = 3;
 }
 
+// ==================== Device ====================
+
+// Device fingerprint info, sent automatically with every request from Android client
+message DeviceInfo {
+  string device_id = 1;       // Stable per-install device identifier (ANDROID_ID or generated UUID)
+  string device_model = 2;    // Build.MODEL, e.g. "Pixel 8"
+  string device_brand = 3;    // Build.MANUFACTURER, e.g. "Google"
+  string system_version = 4;  // OS version, e.g. "Android 14"
+  string app_version = 5;     // App versionName, e.g. "1.0.0"
+}
+
 // ==================== Envelope ====================
 
 // Unified request/response envelope for protobuf transport
 message ProtoEnvelope {
-  string action = 1; // e.g. "auth.login", "gm.items", "commands.execute"
-  bytes payload = 2; // Serialized request/response message
+  string action = 1;        // e.g. "auth.login", "gm.items", "commands.execute"
+  bytes payload = 2;        // Serialized request/response message
+  DeviceInfo device = 3;    // Device fingerprint, automatically attached by client
 }

@@ -3,6 +3,7 @@ package com.genshin.gm.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.genshin.gm.data.local.DeviceManager
 import com.genshin.gm.data.local.SessionManager
 import com.genshin.gm.data.proto.ProtoClient
 import com.genshin.gm.data.repository.ResourceManager
@@ -46,11 +47,12 @@ private const val DEFAULT_SERVER_URL = UiState.DEFAULT_SERVER_URL
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val sessionManager = SessionManager(app)
+    private val deviceManager = DeviceManager(app)
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
 
     // Eagerly initialize with default URL to prevent NPE
-    private var protoClient: ProtoClient = ProtoClient(DEFAULT_SERVER_URL)
+    private var protoClient: ProtoClient = ProtoClient(DEFAULT_SERVER_URL, deviceManager)
     private var resourceManager: ResourceManager = ResourceManager(app, DEFAULT_SERVER_URL)
 
     init {
@@ -101,7 +103,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun initClient(url: String) {
-        protoClient = ProtoClient(url)
+        protoClient = ProtoClient(url, deviceManager)
         resourceManager = ResourceManager(getApplication(), url)
     }
 

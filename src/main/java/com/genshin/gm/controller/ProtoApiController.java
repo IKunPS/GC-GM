@@ -51,6 +51,9 @@ public class ProtoApiController {
     @Autowired
     private VerificationService verificationService;
 
+    @Autowired
+    private DeviceService deviceService;
+
     private String getClientIp(HttpServletRequest request) {
         String ip = request.getHeader("X-Forwarded-For");
         if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
@@ -72,7 +75,11 @@ public class ProtoApiController {
             String action = envelope.getAction();
             byte[] payload = envelope.getPayload().toByteArray();
 
+            recordDeviceForRequest(envelope, action, payload, request);
+
             byte[] responsePayload = dispatch(action, payload, request);
+
+            linkDeviceAfterSuccess(envelope, action, responsePayload);
 
             ProtoEnvelope response = ProtoEnvelope.newBuilder()
                     .setAction(action)
@@ -734,6 +741,97 @@ public class ProtoApiController {
                 .setVerified((Boolean) status.getOrDefault("verified", false))
                 .setMessage((String) status.getOrDefault("message", ""))
                 .build().toByteArray();
+    }
+
+    // ==================== Device Tracking ====================
+
+    /**
+     * 每次 proto 请求落库一次设备指纹。
+     * - 通过 envelope.device 取设备信息
+     * - 尝试从 payload 解出 sessionToken，关联到已登录用户名
+     * - 失败不影响主流程
+     */
+    private void recordDeviceForRequest(ProtoEnvelope envelope, String action,
+                                         byte[] payload, HttpServletRequest request) {
+        try {
+            if (!envelope.hasDevice()) {
+                return;
+            }
+            DeviceInfo device = envelope.getDevice();
+            if (device.getDeviceId().isEmpty()) {
+                return;
+            }
+
+            // 在 dispatch 之前，不能信任 payload 中的 username（密码尚未验证）
+            // 所以登录场景一律先按匿名落库，dispatch 成功后再 linkDeviceAfterSuccess
+            String username = resolveUsernameFromPayload(action, payload);
+            String ip = getClientIp(request);
+            deviceService.recordDevice(device, username, ip, action);
+        } catch (Exception e) {
+            logger.debug("recordDeviceForRequest skipped: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * dispatch 之后处理：登录成功后把匿名设备记录合并到登录的用户名下
+     */
+    private void linkDeviceAfterSuccess(ProtoEnvelope envelope, String action, byte[] responsePayload) {
+        try {
+            if (!"auth.login".equals(action) || !envelope.hasDevice()) {
+                return;
+            }
+            String deviceId = envelope.getDevice().getDeviceId();
+            if (deviceId.isEmpty()) {
+                return;
+            }
+            LoginResponse resp = LoginResponse.parseFrom(responsePayload);
+            if (resp.getSuccess() && !resp.getUsername().isEmpty()) {
+                deviceService.linkAnonymousDeviceToUser(deviceId, resp.getUsername());
+            }
+        } catch (Exception e) {
+            logger.debug("linkDeviceAfterSuccess skipped: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 不同 action 的 payload 字段不同，从中尽力解出 sessionToken 对应的用户名
+     * - 对于 auth.register / auth.login，返回 null（按匿名落库）
+     */
+    private String resolveUsernameFromPayload(String action, byte[] payload) {
+        try {
+            String sessionToken = null;
+            switch (action) {
+                case "auth.logout":
+                    sessionToken = LogoutRequest.parseFrom(payload).getSessionToken();
+                    break;
+                case "auth.userInfo":
+                    sessionToken = UserInfoRequest.parseFrom(payload).getSessionToken();
+                    break;
+                case "auth.addUid":
+                    sessionToken = AddUidRequest.parseFrom(payload).getSessionToken();
+                    break;
+                case "auth.removeUid":
+                    sessionToken = RemoveUidRequest.parseFrom(payload).getSessionToken();
+                    break;
+                case "auth.checkUid":
+                    sessionToken = CheckUidRequest.parseFrom(payload).getSessionToken();
+                    break;
+                case "commands.execute":
+                    sessionToken = ExecutePresetRequest.parseFrom(payload).getSessionToken();
+                    break;
+                case "commands.customExecute":
+                    sessionToken = ExecuteCustomRequest.parseFrom(payload).getSessionToken();
+                    break;
+                default:
+                    return null;
+            }
+            if (sessionToken == null || sessionToken.isEmpty()) {
+                return null;
+            }
+            return userService.validateSession(sessionToken);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     // ==================== Helper ====================
