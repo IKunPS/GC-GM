@@ -44,14 +44,19 @@ public class AuthController {
     }
 
     /**
-     * 用户注册
+     * 用户注册 (REST/PC 浏览器入口)
+     *
+     * PC 浏览器没有可靠的设备标识，不做「一设备一账号」限制，按 IP 维度由日志层观测。
      */
     @PostMapping("/register")
-    public ResponseEntity<Map<String, Object>> register(@RequestBody Map<String, String> body) {
+    public ResponseEntity<Map<String, Object>> register(@RequestBody Map<String, String> body,
+                                                         HttpServletRequest request) {
         String username = body.get("username");
         String password = body.get("password");
 
         Map<String, Object> result = userService.register(username, password);
+        SecurityLogger.logAction(getClientIp(request), username, null, "REG_PC",
+                "PC 注册: success=" + result.get("success"));
         return ResponseEntity.ok(result);
     }
 

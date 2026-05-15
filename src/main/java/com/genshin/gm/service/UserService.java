@@ -1,7 +1,13 @@
 package com.genshin.gm.service;
 
+import com.genshin.gm.config.AppConfig;
+import com.genshin.gm.config.ConfigLoader;
+import com.genshin.gm.model.OpenCommandResponse;
 import com.genshin.gm.model.User;
+import com.genshin.gm.model.UserDevice;
+import com.genshin.gm.repository.UserDeviceRepository;
 import com.genshin.gm.repository.UserRepository;
+import com.genshin.gm.util.SecurityLogger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +30,12 @@ public class UserService {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private UserDeviceRepository userDeviceRepository;
+
+    @Autowired
+    private GrasscutterService grasscutterService;
+
     // 存储用户session: sessionToken -> username
     private final Map<String, String> sessions = new ConcurrentHashMap<>();
 
@@ -35,8 +47,13 @@ public class UserService {
 
     /**
      * 用户注册
+     *
+     * @param username 用户名
+     * @param password 密码
+     * @param deviceId 客户端上报的设备 ID（可空：仅 PC 浏览器旧路径会传 null，
+     *                 proto 路径必传，缺失会被上层拒绝）
      */
-    public Map<String, Object> register(String username, String password) {
+    public Map<String, Object> register(String username, String password, String deviceId) {
         Map<String, Object> result = new HashMap<>();
 
         try {
@@ -62,6 +79,19 @@ public class UserService {
                 return result;
             }
 
+            // 一设备一账号：检查 device_id 是否已被其他用户使用
+            if (deviceId != null && !deviceId.isEmpty()) {
+                boolean deviceTaken = userDeviceRepository.findByDeviceId(deviceId).stream()
+                        .anyMatch(d -> d.getUsername() != null
+                                && !"__anonymous__".equals(d.getUsername())
+                                && !username.equals(d.getUsername()));
+                if (deviceTaken) {
+                    result.put("success", false);
+                    result.put("message", "此设备已注册过账号，每台设备只能注册一个账号");
+                    return result;
+                }
+            }
+
             // 加密密码
             String hashedPassword = hashPassword(password);
 
@@ -69,7 +99,15 @@ public class UserService {
             User user = new User(username, hashedPassword);
             userRepository.save(user);
 
-            logger.info("用户注册成功: {}", username);
+            // 立即把当前设备绑定到该用户（避免再次注册可绕过设备唯一限制）
+            if (deviceId != null && !deviceId.isEmpty()) {
+                bindDeviceToUserAtRegister(username, deviceId);
+            }
+
+            logger.info("用户注册成功: {} (deviceId={})", username, deviceId);
+
+            // 异步通知 Grasscutter 创建对应账号，不阻塞注册响应
+            sendAccountCreateToGc(username);
 
             result.put("success", true);
             result.put("message", "注册成功");
@@ -82,6 +120,82 @@ public class UserService {
         }
 
         return result;
+    }
+
+    /**
+     * 兼容旧调用：无 device_id 的入口
+     */
+    public Map<String, Object> register(String username, String password) {
+        return register(username, password, null);
+    }
+
+    /**
+     * 注册成功瞬间把当前设备绑定到该用户：
+     * - 同设备此前任何匿名记录都改成此用户名
+     * - 若不存在则直接新建一条
+     */
+    private void bindDeviceToUserAtRegister(String username, String deviceId) {
+        try {
+            List<UserDevice> existing = userDeviceRepository.findByDeviceId(deviceId);
+            UserDevice toKeep = null;
+            for (UserDevice d : existing) {
+                if (username.equals(d.getUsername())) {
+                    toKeep = d;
+                    break;
+                }
+            }
+            if (toKeep == null) {
+                // 优先复用匿名记录
+                for (UserDevice d : existing) {
+                    if ("__anonymous__".equals(d.getUsername())) {
+                        d.setUsername(username);
+                        userDeviceRepository.save(d);
+                        toKeep = d;
+                        break;
+                    }
+                }
+            }
+            if (toKeep == null) {
+                UserDevice d = new UserDevice();
+                d.setUsername(username);
+                d.setDeviceId(deviceId);
+                d.touch("auth.register", null);
+                userDeviceRepository.save(d);
+            }
+        } catch (Exception e) {
+            logger.warn("注册时绑定设备失败 username={} deviceId={}: {}", username, deviceId, e.getMessage());
+        }
+    }
+
+    /**
+     * 注册成功后通知 Grasscutter 创建账号：
+     *   account create <username>
+     * fire-and-forget：用独立 daemon 线程发送，避免阻塞注册响应；失败不影响注册主流程。
+     * 不使用 @Async：同类自调用 Spring AOP 不生效，反而会变成同步阻塞。
+     */
+    public void sendAccountCreateToGc(String username) {
+        Thread t = new Thread(() -> {
+            try {
+                AppConfig.GrasscutterConfig gc = ConfigLoader.getConfig().getGrasscutter();
+                if (gc == null || gc.getConsoleToken() == null || gc.getConsoleToken().isEmpty()) {
+                    logger.warn("Grasscutter consoleToken 未配置，跳过 account create");
+                    return;
+                }
+                String command = "account create " + username;
+                OpenCommandResponse resp = grasscutterService.executeConsoleCommand(
+                        gc.getFullUrl(), gc.getConsoleToken(), command,
+                        null, "system", null);
+                int retcode = resp != null ? resp.getRetcode() : -1;
+                String msg = resp != null && resp.getMessage() != null ? resp.getMessage() : "";
+                logger.info("GC account create 完成: username={}, retcode={}, msg={}", username, retcode, msg);
+                SecurityLogger.logAction(null, "system", null, "GC_ACCOUNT_CREATE",
+                        "username=" + username + " retcode=" + retcode + " msg=" + msg);
+            } catch (Exception e) {
+                logger.error("GC account create 异常 username={}", username, e);
+            }
+        }, "gc-account-create-" + username);
+        t.setDaemon(true);
+        t.start();
     }
 
     /**

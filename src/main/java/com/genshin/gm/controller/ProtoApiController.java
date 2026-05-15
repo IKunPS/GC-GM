@@ -77,7 +77,7 @@ public class ProtoApiController {
 
             recordDeviceForRequest(envelope, action, payload, request);
 
-            byte[] responsePayload = dispatch(action, payload, request);
+            byte[] responsePayload = dispatch(envelope, action, payload, request);
 
             linkDeviceAfterSuccess(envelope, action, responsePayload);
 
@@ -111,11 +111,11 @@ public class ProtoApiController {
         }
     }
 
-    private byte[] dispatch(String action, byte[] payload, HttpServletRequest request)
+    private byte[] dispatch(ProtoEnvelope envelope, String action, byte[] payload, HttpServletRequest request)
             throws InvalidProtocolBufferException {
         return switch (action) {
             // Auth
-            case "auth.register" -> handleRegister(payload);
+            case "auth.register" -> handleRegister(envelope, payload);
             case "auth.login" -> handleLogin(payload);
             case "auth.logout" -> handleLogout(payload);
             case "auth.userInfo" -> handleUserInfo(payload);
@@ -171,9 +171,19 @@ public class ProtoApiController {
 
     // ==================== Auth Handlers ====================
 
-    private byte[] handleRegister(byte[] payload) throws InvalidProtocolBufferException {
+    private byte[] handleRegister(ProtoEnvelope envelope, byte[] payload) throws InvalidProtocolBufferException {
         RegisterRequest req = RegisterRequest.parseFrom(payload);
-        Map<String, Object> result = userService.register(req.getUsername(), req.getPassword());
+
+        // 强制：注册必须携带 device_id（防止脚本/PC 浏览器绕过设备唯一限制）
+        String deviceId = (envelope.hasDevice()) ? envelope.getDevice().getDeviceId() : "";
+        if (deviceId == null || deviceId.isEmpty()) {
+            return ApiResponse.newBuilder()
+                    .setSuccess(false)
+                    .setMessage("注册请求缺少设备标识，请使用 APK 客户端注册")
+                    .build().toByteArray();
+        }
+
+        Map<String, Object> result = userService.register(req.getUsername(), req.getPassword(), deviceId);
         return ApiResponse.newBuilder()
                 .setSuccess((Boolean) result.getOrDefault("success", false))
                 .setMessage((String) result.getOrDefault("message", ""))

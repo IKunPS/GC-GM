@@ -23,7 +23,7 @@ class SessionManager(private val context: Context) {
 
     val sessionToken: Flow<String?> = context.dataStore.data.map { it[KEY_SESSION_TOKEN] }
     val username: Flow<String?> = context.dataStore.data.map { it[KEY_USERNAME] }
-    val serverUrl: Flow<String> = context.dataStore.data.map { it[KEY_SERVER_URL] ?: "http://110.42.109.118:8080" }
+    val serverUrl: Flow<String> = context.dataStore.data.map { it[KEY_SERVER_URL] ?: "http://210.16.175.19:8080" }
     val activeUid: Flow<String?> = context.dataStore.data.map { it[KEY_ACTIVE_UID] }
 
     suspend fun getSessionToken(): String? = sessionToken.first()
