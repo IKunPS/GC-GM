@@ -81,10 +81,11 @@ public class UserService {
 
             // 一设备一账号：检查 device_id 是否已被其他用户使用
             if (deviceId != null && !deviceId.isEmpty()) {
+                final String currentUsername = username;
                 boolean deviceTaken = userDeviceRepository.findByDeviceId(deviceId).stream()
                         .anyMatch(d -> d.getUsername() != null
                                 && !"__anonymous__".equals(d.getUsername())
-                                && !username.equals(d.getUsername()));
+                                && !currentUsername.equals(d.getUsername()));
                 if (deviceTaken) {
                     result.put("success", false);
                     result.put("message", "此设备已注册过账号，每台设备只能注册一个账号");
