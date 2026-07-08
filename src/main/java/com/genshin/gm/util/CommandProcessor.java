@@ -1,12 +1,15 @@
 package com.genshin.gm.util;
 
+import com.genshin.gm.config.AppConfig;
+import com.genshin.gm.config.ConfigLoader;
+
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
- * OpenCommand指令处理工具类
- * 用于智能处理需要UID的GM指令
+ * 指令处理工具类。
+ *
+ * grasscutter 模式：智能处理 @UID，适配 OpenCommand 控制台。
+ * muip 模式：保持 ViaGenshin/GIO 控制台文本，UID 由 MUIP 参数 uid 单独传递。
  */
 public class CommandProcessor {
 
@@ -104,17 +107,52 @@ public class CommandProcessor {
     ));
 
     /**
-     * 处理指令，智能添加UID
-     * 规则：
-     * 1. 所有需要UID的命令：@UID 统一放在命令名后面（例如：prop @UID fly off）
-     *    这是OpenCommand控制台模式下最可靠的解析位置，放在末尾可能导致定位到错误玩家
-     * 2. 处理前先删除命令中已有的 @ 符号，然后统一添加 @UID
+     * 处理指令。
+     *
+     * grasscutter 模式：智能添加 @UID。
+     * muip 模式：按 ViaGenshin console.go 逻辑，命令文本进入 msg，UID 不拼到文本里。
      *
      * @param command 原始指令
      * @param uid 玩家UID
      * @return 处理后的指令
      */
     public static String processCommand(String command, String uid) {
+        if (isMuipMode()) {
+            return processMuipCommand(command);
+        }
+        return processGrasscutterCommand(command, uid);
+    }
+
+    /**
+     * MUIP/GIO 指令处理：不添加 @UID。
+     *
+     * 为了兼容 Android 端已有快捷指令，把常见 Grasscutter 展示格式转换为 GIO 文本格式：
+     * - /give 201 x100 -> give 201 100
+     * - /heal -> heal
+     * - give @UID 201 99 -> give 201 99
+     */
+    public static String processMuipCommand(String command) {
+        if (command == null || command.trim().isEmpty()) {
+            return command;
+        }
+        String result = command.trim();
+        if (result.startsWith("/")) {
+            result = result.substring(1).trim();
+        }
+        result = result.replaceAll("@UID", "")
+                .replaceAll("@\\d+", "")
+                .replaceAll("@\\s+", "")
+                .replaceAll("@", "")
+                .replaceAll("(?i)\\bx(\\d+)\\b", "$1")
+                .replaceAll("\\s+", " ")
+                .trim();
+        return result;
+    }
+
+    /**
+     * Grasscutter/OpenCommand 指令处理：智能添加UID。
+     */
+    public static String processGrasscutterCommand(String command, String uid) {
         if (command == null || command.trim().isEmpty()) {
             return command;
         }
@@ -147,11 +185,11 @@ public class CommandProcessor {
         // 第一步：移除命令中所有的 @ 符号和相关内容
         // 匹配模式：@UID, @数字, @ （包括后面的空格）
         String cleanCommand = command.replaceAll("@UID", "")
-                                    .replaceAll("@\\d+", "")
-                                    .replaceAll("@\\s+", "")
-                                    .replaceAll("@", "")
-                                    .replaceAll("\\s+", " ")
-                                    .trim();
+                .replaceAll("@\\d+", "")
+                .replaceAll("@\\s+", "")
+                .replaceAll("@", "")
+                .replaceAll("\\s+", " ")
+                .trim();
 
         // 第二步：统一将 @UID 插入到命令名后面
         // 例如: "prop fly off" → "prop @10261 fly off"
@@ -181,6 +219,9 @@ public class CommandProcessor {
         }
 
         String cmdName = parts[0].toLowerCase();
+        if (cmdName.startsWith("/")) {
+            cmdName = cmdName.substring(1);
+        }
         return UID_TARGETABLE_COMMANDS.contains(cmdName);
     }
 
@@ -213,7 +254,7 @@ public class CommandProcessor {
     }
 
     /**
-     * 验证指令格式（基于Grasscutter标准命令格式）
+     * 验证指令格式（兼容 Grasscutter 展示格式和 ViaGenshin/GIO 文本格式）
      * @param command 指令
      * @return 错误信息，如果格式正确则返回null
      */
@@ -265,7 +306,7 @@ public class CommandProcessor {
                 }
                 String clearType = parts[1].toLowerCase();
                 if (!clearType.equals("all") && !clearType.equals("wp") &&
-                    !clearType.equals("art") && !clearType.equals("mat")) {
+                        !clearType.equals("art") && !clearType.equals("mat")) {
                     return "clear指令参数错误，必须是 all, wp, art 或 mat 之一";
                 }
                 break;
@@ -277,7 +318,7 @@ public class CommandProcessor {
                     return "give指令缺少参数，用法: give <itemId|avatarId|params> [modifiers...]";
                 }
                 // 放宽验证：允许任意字母数字组合，支持各种格式
-                // 不再严格检查参数格式，交给Grasscutter服务器处理
+                // 不再严格检查参数格式，交给服务器处理
                 break;
 
             case "spawn":
@@ -403,42 +444,9 @@ public class CommandProcessor {
         return null; // 验证通过
     }
 
-    /**
-     * 验证give指令的修饰符格式
-     */
-    private static boolean validateGiveModifier(String modifier) {
-        String lower = modifier.toLowerCase();
-
-        // x<amount> or <amount>x
-        if (lower.matches("\\d+x|x\\d+")) {
-            return true;
-        }
-
-        // lv<level>, l<level>, lvl<level>
-        if (lower.matches("(lv|l|lvl)\\d+")) {
-            return true;
-        }
-
-        // r<refinement>
-        if (lower.matches("r\\d+")) {
-            return true;
-        }
-
-        // c<constellation>
-        if (lower.matches("c\\d+")) {
-            return true;
-        }
-
-        // 组合形式，如 lv90r5, x10c6 等
-        if (lower.matches("((lv|l|lvl)?\\d+)?(r\\d+)?(c\\d+)?(x\\d+)?")) {
-            return true;
-        }
-
-        // 星级，如 5* 或 4*
-        if (lower.matches("\\d+\\*")) {
-            return true;
-        }
-
-        return false;
+    private static boolean isMuipMode() {
+        AppConfig config = ConfigLoader.getConfig();
+        return "muip".equalsIgnoreCase(config.getLaunchMode())
+                || config.getGrasscutter().isMuipMode();
     }
 }
