@@ -24,7 +24,9 @@ public class ConfigLoader {
         AppConfig config = new AppConfig();
         config.setFrontend(new AppConfig.FrontendConfig());
         config.setGrasscutter(new AppConfig.GrasscutterConfig());
+        config.setMuip(new AppConfig.MuipConfig());
         config.setMysql(new AppConfig.MySQLConfig());
+        config.setApp(new AppConfig.AppDownloadConfig());
 
         try {
             ObjectMapper objectMapper = new ObjectMapper();
@@ -69,8 +71,16 @@ public class ConfigLoader {
                 appConfig.setGrasscutter(new AppConfig.GrasscutterConfig());
                 needRewrite = true;
             }
+            if (appConfig.getMuip() == null) {
+                appConfig.setMuip(new AppConfig.MuipConfig());
+                needRewrite = true;
+            }
             if (appConfig.getMysql() == null) {
                 appConfig.setMysql(new AppConfig.MySQLConfig());
+                needRewrite = true;
+            }
+            if (appConfig.getApp() == null) {
+                appConfig.setApp(new AppConfig.AppDownloadConfig());
                 needRewrite = true;
             }
 
@@ -84,8 +94,10 @@ public class ConfigLoader {
             logger.info("成功加载配置文件: {}", CONFIG_FILE);
             logger.info("前端地址: {}:{}", appConfig.getFrontend().getHost(),
                        appConfig.getFrontend().getPort());
+            logger.info("Grasscutter API模式: {}", appConfig.getGrasscutter().getApiMode());
             logger.info("Grasscutter API: {}", appConfig.getGrasscutter().getFullUrl());
             logger.info("Grasscutter 超时: {}ms", appConfig.getGrasscutter().getTimeout());
+            logger.info("MUIP API: {} enabled={}", appConfig.getMuip().getApiUrl(), appConfig.getMuip().isEnabled());
             logger.info("MySQL连接: {}:{}/{}",
                        appConfig.getMysql().getHost(),
                        appConfig.getMysql().getPort(),
