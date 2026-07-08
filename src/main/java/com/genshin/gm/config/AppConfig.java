@@ -83,17 +83,22 @@ public class AppConfig {
         private boolean ssl = false;
         private String address = "127.0.0.1";
         private int port = 21041;
-        private String region = "cn_gf01";
+        private String region = "dev_docker";
         private String sign = "";
         private int timeout = 10000;
         /**
-         * MUIP 执行 GM 指令的 cmd，不同 HK4E/GIO 端可能不同。
+         * ViaGenshin console.go 的 ConsoleExecute(cmd, uid, text) 中 cmd 由调用方传入。
+         * GM 指令默认按 cmd + uid + msg + region + ticket 发送。
          */
         private String commandCmd = "1116";
         /**
-         * GM 指令文本参数名，不同 HK4E/GIO 端可能是 command/cmdline/msg 等。
+         * ViaGenshin 源码固定使用 msg 承载 GM 文本。
          */
-        private String commandParamName = "command";
+        private String commandParamName = "msg";
+        /**
+         * 当控制台入口没有传入 callerUid 时使用。
+         */
+        private long defaultUid = 0;
         private boolean appendRegion = true;
         private boolean appendTicket = true;
 
@@ -115,6 +120,8 @@ public class AppConfig {
         public void setCommandCmd(String commandCmd) { this.commandCmd = commandCmd; }
         public String getCommandParamName() { return commandParamName; }
         public void setCommandParamName(String commandParamName) { this.commandParamName = commandParamName; }
+        public long getDefaultUid() { return defaultUid; }
+        public void setDefaultUid(long defaultUid) { this.defaultUid = defaultUid; }
         public boolean isAppendRegion() { return appendRegion; }
         public void setAppendRegion(boolean appendRegion) { this.appendRegion = appendRegion; }
         public boolean isAppendTicket() { return appendTicket; }
