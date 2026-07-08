@@ -18,53 +18,18 @@ public class AppConfig {
     private MySQLConfig mysql;
     private AppDownloadConfig app;
 
-    public String getLaunchMode() {
-        return launchMode;
-    }
-
-    public void setLaunchMode(String launchMode) {
-        this.launchMode = launchMode;
-    }
-
-    public FrontendConfig getFrontend() {
-        return frontend;
-    }
-
-    public void setFrontend(FrontendConfig frontend) {
-        this.frontend = frontend;
-    }
-
-    public GrasscutterConfig getGrasscutter() {
-        return grasscutter;
-    }
-
-    public void setGrasscutter(GrasscutterConfig grasscutter) {
-        this.grasscutter = grasscutter;
-    }
-
-    public MuipConfig getMuip() {
-        return muip != null ? muip : new MuipConfig();
-    }
-
-    public void setMuip(MuipConfig muip) {
-        this.muip = muip;
-    }
-
-    public MySQLConfig getMysql() {
-        return mysql;
-    }
-
-    public void setMysql(MySQLConfig mysql) {
-        this.mysql = mysql;
-    }
-
-    public AppDownloadConfig getApp() {
-        return app != null ? app : new AppDownloadConfig();
-    }
-
-    public void setApp(AppDownloadConfig app) {
-        this.app = app;
-    }
+    public String getLaunchMode() { return launchMode; }
+    public void setLaunchMode(String launchMode) { this.launchMode = launchMode; }
+    public FrontendConfig getFrontend() { return frontend; }
+    public void setFrontend(FrontendConfig frontend) { this.frontend = frontend; }
+    public GrasscutterConfig getGrasscutter() { return grasscutter; }
+    public void setGrasscutter(GrasscutterConfig grasscutter) { this.grasscutter = grasscutter; }
+    public MuipConfig getMuip() { return muip != null ? muip : new MuipConfig(); }
+    public void setMuip(MuipConfig muip) { this.muip = muip; }
+    public MySQLConfig getMysql() { return mysql; }
+    public void setMysql(MySQLConfig mysql) { this.mysql = mysql; }
+    public AppDownloadConfig getApp() { return app != null ? app : new AppDownloadConfig(); }
+    public void setApp(AppDownloadConfig app) { this.app = app; }
 
     public static class FrontendConfig {
         private String host = "localhost";
@@ -79,9 +44,7 @@ public class AppConfig {
         public void setAutoOpen(boolean autoOpen) { this.autoOpen = autoOpen; }
 
         @JsonIgnore
-        public String getUrl() {
-            return "http://" + host + ":" + port;
-        }
+        public String getUrl() { return "http://" + host + ":" + port; }
     }
 
     public static class GrasscutterConfig {
@@ -109,14 +72,10 @@ public class AppConfig {
         public void setTimeout(int timeout) { this.timeout = timeout; }
 
         @JsonIgnore
-        public String getFullUrl() {
-            return serverUrl + apiPath;
-        }
+        public String getFullUrl() { return serverUrl + apiPath; }
 
         @JsonIgnore
-        public boolean isMuipMode() {
-            return "muip".equalsIgnoreCase(apiMode);
-        }
+        public boolean isMuipMode() { return "muip".equalsIgnoreCase(apiMode); }
     }
 
     public static class MuipConfig {
@@ -162,14 +121,10 @@ public class AppConfig {
         public void setAppendTicket(boolean appendTicket) { this.appendTicket = appendTicket; }
 
         @JsonIgnore
-        public String getBaseUrl() {
-            return (ssl ? "https://" : "http://") + address + ":" + port;
-        }
+        public String getBaseUrl() { return (ssl ? "https://" : "http://") + address + ":" + port; }
 
         @JsonIgnore
-        public String getApiUrl() {
-            return getBaseUrl() + "/api";
-        }
+        public String getApiUrl() { return getBaseUrl() + "/api"; }
     }
 
     public static class AppDownloadConfig {
@@ -206,7 +161,7 @@ public class AppConfig {
         @JsonIgnore
         public String getJdbcUrl() {
             return "jdbc:mysql://" + host + ":" + port + "/" + database
-                    + "?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8&characterEncoding=UTF-8&useUnicode=true";
+                    + "?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8&useUnicode=true";
         }
     }
 }
