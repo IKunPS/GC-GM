@@ -8,11 +8,25 @@
     "minAndroid": "Android 8.0+ (API 26)"
   },
   "grasscutter": {
+    "apiMode": "opencommand",
     "serverUrl": "http://127.0.0.1:1145",
     "apiPath": "/opencommand/api",
     "consoleToken": "sh345Hfss34P4Ya99sb4e6MRUEGd5srm95i34hFBf2EMDPutOye",
     "adminToken": "CHANGE_ME_TO_A_SECURE_RANDOM_STRING",
     "timeout": 10000
+  },
+  "muip": {
+    "enabled": false,
+    "ssl": false,
+    "address": "127.0.0.1",
+    "port": 21041,
+    "region": "cn_gf01",
+    "sign": "CHANGE_ME_TO_MUIP_SIGN_KEY",
+    "timeout": 10000,
+    "commandCmd": "1116",
+    "commandParamName": "command",
+    "appendRegion": true,
+    "appendTicket": true
   },
   "mysql": {
     "host": "localhost",
