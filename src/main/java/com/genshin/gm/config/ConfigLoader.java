@@ -22,6 +22,7 @@ public class ConfigLoader {
      */
     private static AppConfig generateDefaultConfig(File configFile) {
         AppConfig config = new AppConfig();
+        config.setLaunchMode("grasscutter");
         config.setFrontend(new AppConfig.FrontendConfig());
         config.setGrasscutter(new AppConfig.GrasscutterConfig());
         config.setMuip(new AppConfig.MuipConfig());
@@ -63,6 +64,10 @@ public class ConfigLoader {
             // 如果配置文件中缺少某些配置段，补充并回写
             boolean needRewrite = false;
 
+            if (appConfig.getLaunchMode() == null || appConfig.getLaunchMode().isBlank()) {
+                appConfig.setLaunchMode("grasscutter");
+                needRewrite = true;
+            }
             if (appConfig.getFrontend() == null) {
                 appConfig.setFrontend(new AppConfig.FrontendConfig());
                 needRewrite = true;
@@ -92,16 +97,15 @@ public class ConfigLoader {
             }
 
             logger.info("成功加载配置文件: {}", CONFIG_FILE);
-            logger.info("前端地址: {}:{}", appConfig.getFrontend().getHost(),
-                       appConfig.getFrontend().getPort());
-            logger.info("Grasscutter API模式: {}", appConfig.getGrasscutter().getApiMode());
+            logger.info("启动连接模式: {}", appConfig.getLaunchMode());
+            logger.info("前端地址: {}:{}", appConfig.getFrontend().getHost(), appConfig.getFrontend().getPort());
             logger.info("Grasscutter API: {}", appConfig.getGrasscutter().getFullUrl());
             logger.info("Grasscutter 超时: {}ms", appConfig.getGrasscutter().getTimeout());
             logger.info("MUIP API: {} enabled={}", appConfig.getMuip().getApiUrl(), appConfig.getMuip().isEnabled());
             logger.info("MySQL连接: {}:{}/{}",
-                       appConfig.getMysql().getHost(),
-                       appConfig.getMysql().getPort(),
-                       appConfig.getMysql().getDatabase());
+                    appConfig.getMysql().getHost(),
+                    appConfig.getMysql().getPort(),
+                    appConfig.getMysql().getDatabase());
 
             return appConfig;
         } catch (IOException e) {
