@@ -72,7 +72,7 @@ public class GrasscutterService {
                                                       String callerIp, String callerUser, String callerUid) {
         if (isMuipMode()) {
             SecurityLogger.logAction(callerIp, callerUser, callerUid, "MUIP_EXECUTE", command);
-            OpenCommandResponse result = muipService.executeCommand(command);
+            OpenCommandResponse result = muipService.executeCommand(command, callerUid);
             String resultStr = (result != null && result.getData() != null) ? result.getData().toString() : "";
             int retcode = result != null ? result.getRetcode() : -1;
             SecurityLogger.logAction(callerIp, callerUser, callerUid, "MUIP_RESULT",
@@ -90,7 +90,8 @@ public class GrasscutterService {
             data.put("muipUrl", ConfigLoader.getConfig().getMuip().getApiUrl());
             data.put("muipEnabled", ConfigLoader.getConfig().getMuip().isEnabled());
             data.put("commandCmd", ConfigLoader.getConfig().getMuip().getCommandCmd());
-            data.put("commandParamName", ConfigLoader.getConfig().getMuip().getCommandParamName());
+            data.put("commandParamName", "msg");
+            data.put("defaultUid", ConfigLoader.getConfig().getMuip().getDefaultUid());
             response.setRetcode(200);
             response.setMessage("MUIP模式");
             response.setData(data);
