@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.genshin.gm.config.AppConfig;
 import com.genshin.gm.config.ConfigLoader;
 import com.genshin.gm.model.OpenCommandResponse;
+import com.genshin.gm.util.CommandProcessor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -111,7 +112,7 @@ public class MuipService {
         Map<String, String> params = new LinkedHashMap<>();
         params.put("cmd", muip.getCommandCmd());
         params.put("uid", resolveUid(uid, muip));
-        params.put("msg", command == null ? "" : command);
+        params.put("msg", CommandProcessor.processMuipCommand(command == null ? "" : command));
         params.put("region", muip.getRegion());
         params.put("ticket", randomTicketHex());
         return params;
@@ -211,12 +212,13 @@ public class MuipService {
                 retcode = "succ".equalsIgnoreCase(msg) ? 0 : 500;
             }
 
-            response.setRetcode(retcode);
+            // OpenCommandResponse.isSuccess 兼容 0/200，但旧 ProtoApiController 的执行响应用 200 判断。
+            response.setRetcode(retcode == 0 ? 200 : retcode);
             response.setMessage(msg.isBlank() ? "MUIP返回成功" : msg);
             response.setData(map);
             return response;
         } catch (Exception e) {
-            response.setRetcode(0);
+            response.setRetcode(200);
             response.setMessage("MUIP返回非JSON响应");
             response.setData(body);
             return response;
