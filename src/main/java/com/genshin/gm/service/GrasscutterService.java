@@ -2,188 +2,116 @@ package com.genshin.gm.service;
 
 import com.genshin.gm.config.AppConfig;
 import com.genshin.gm.config.ConfigLoader;
-import com.genshin.gm.model.OpenCommandRequest;
 import com.genshin.gm.model.OpenCommandResponse;
 import com.genshin.gm.util.SecurityLogger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.http.*;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClientException;
-import org.springframework.web.client.RestTemplate;
 
-import java.time.Duration;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
- * Grasscutter OpenCommand 服务。
+ * 兼容旧代码的游戏服务门面。
  *
- * 这里只保留 Grasscutter / OpenCommand 的 POST JSON 逻辑；
- * HK4E MUIP 逻辑在 MuipService 中实现，模式分流在 GameServerService 中实现。
+ * 原项目的控制器大概率已经注入 GrasscutterService，
+ * 所以保留这个类名作为统一入口，但实际实现已经拆开：
+ * - GrasscutterOpenCommandService: Grasscutter POST JSON / OpenCommand
+ * - MuipService: HK4E MUIP GET /api + SHA256签名
  */
 @Service
 public class GrasscutterService {
     private static final Logger logger = LoggerFactory.getLogger(GrasscutterService.class);
-    private final RestTemplate restTemplate;
+
+    private final GrasscutterOpenCommandService openCommandService;
+    private final MuipService muipService;
 
     @Autowired
-    public GrasscutterService(RestTemplateBuilder builder) {
-        AppConfig.GrasscutterConfig config = ConfigLoader.getConfig().getGrasscutter();
-        this.restTemplate = builder
-                .setConnectTimeout(Duration.ofMillis(config.getTimeout()))
-                .setReadTimeout(Duration.ofMillis(config.getTimeout()))
-                .build();
+    public GrasscutterService(GrasscutterOpenCommandService openCommandService, MuipService muipService) {
+        this.openCommandService = openCommandService;
+        this.muipService = muipService;
     }
 
     public OpenCommandResponse ping(String serverUrl) {
-        try {
-            OpenCommandRequest request = new OpenCommandRequest("ping");
-            return sendRequest(serverUrl, request);
-        } catch (Exception e) {
-            logger.error("Ping失败", e);
-            OpenCommandResponse response = new OpenCommandResponse();
-            response.setRetcode(500);
-            response.setMessage("连接失败: " + e.getMessage());
-            return response;
+        if (isMuipMode()) {
+            return muipService.ping();
         }
+        return openCommandService.ping(serverUrl);
     }
 
     public OpenCommandResponse getOnlinePlayers(String serverUrl) {
-        try {
-            OpenCommandRequest request = new OpenCommandRequest("online");
-            return sendRequest(serverUrl, request);
-        } catch (Exception e) {
-            logger.error("获取在线玩家失败", e);
-            OpenCommandResponse response = new OpenCommandResponse();
-            response.setRetcode(500);
-            response.setMessage("获取失败: " + e.getMessage());
-            return response;
+        if (isMuipMode()) {
+            return unsupportedInMuip("MUIP模式暂未实现在线玩家列表，请使用具体MUIP cmd扩展");
         }
+        return openCommandService.getOnlinePlayers(serverUrl);
     }
 
     public OpenCommandResponse sendCode(String serverUrl, int uid) {
-        try {
-            OpenCommandRequest request = new OpenCommandRequest("sendCode", uid);
-            return sendRequest(serverUrl, request);
-        } catch (Exception e) {
-            logger.error("发送验证码失败", e);
-            OpenCommandResponse response = new OpenCommandResponse();
-            response.setRetcode(500);
-            response.setMessage("发送失败: " + e.getMessage());
-            return response;
+        if (isMuipMode()) {
+            return unsupportedInMuip("MUIP模式不支持OpenCommand验证码流程");
         }
+        return openCommandService.sendCode(serverUrl, uid);
     }
 
     public OpenCommandResponse verifyCode(String serverUrl, String token, int code) {
-        try {
-            OpenCommandRequest request = new OpenCommandRequest("verify", code);
-            request.setToken(token);
-            return sendRequest(serverUrl, request);
-        } catch (Exception e) {
-            logger.error("验证失败", e);
-            OpenCommandResponse response = new OpenCommandResponse();
-            response.setRetcode(500);
-            response.setMessage("验证失败: " + e.getMessage());
-            return response;
+        if (isMuipMode()) {
+            return unsupportedInMuip("MUIP模式不支持OpenCommand验证码流程");
         }
+        return openCommandService.verifyCode(serverUrl, token, code);
     }
 
     public OpenCommandResponse executeCommand(String serverUrl, String token, String command) {
-        try {
-            OpenCommandRequest request = new OpenCommandRequest("command", command);
-            request.setToken(token);
-            return sendRequest(serverUrl, request);
-        } catch (Exception e) {
-            logger.error("执行命令失败", e);
-            OpenCommandResponse response = new OpenCommandResponse();
-            response.setRetcode(500);
-            response.setMessage("执行失败: " + e.getMessage());
-            return response;
+        if (isMuipMode()) {
+            return muipService.executeCommand(command);
         }
+        return openCommandService.executeCommand(serverUrl, token, command);
     }
 
     public OpenCommandResponse executeConsoleCommand(String serverUrl, String consoleToken, String command,
                                                       String callerIp, String callerUser, String callerUid) {
-        try {
-            OpenCommandRequest request = new OpenCommandRequest("command", command);
-            request.setToken(consoleToken);
-
-            SecurityLogger.logAction(callerIp, callerUser, callerUid, "GC_EXECUTE", command);
-            OpenCommandResponse result = sendRequest(serverUrl, request);
-
+        if (isMuipMode()) {
+            SecurityLogger.logAction(callerIp, callerUser, callerUid, "MUIP_EXECUTE", command);
+            OpenCommandResponse result = muipService.executeCommand(command);
             String resultStr = (result != null && result.getData() != null) ? result.getData().toString() : "";
             int retcode = result != null ? result.getRetcode() : -1;
-            SecurityLogger.logAction(callerIp, callerUser, callerUid, "GC_RESULT",
+            SecurityLogger.logAction(callerIp, callerUser, callerUid, "MUIP_RESULT",
                     "retcode=" + retcode + " | 指令: " + command + " | 结果: " + resultStr);
-
             return result;
-        } catch (Exception e) {
-            logger.error("执行控制台命令失败", e);
-            SecurityLogger.logAction(callerIp, callerUser, callerUid, "GC_ERROR",
-                    "指令执行异常: " + command + " | 错误: " + e.getMessage());
-            OpenCommandResponse response = new OpenCommandResponse();
-            response.setRetcode(500);
-            response.setMessage("执行失败: " + e.getMessage());
-            return response;
         }
+        return openCommandService.executeConsoleCommand(serverUrl, consoleToken, command, callerIp, callerUser, callerUid);
     }
 
     public OpenCommandResponse getRunMode(String serverUrl, String token) {
-        try {
-            OpenCommandRequest request = new OpenCommandRequest("runmode");
-            request.setToken(token);
-            return sendRequest(serverUrl, request);
-        } catch (Exception e) {
-            logger.error("获取运行模式失败", e);
+        if (isMuipMode()) {
             OpenCommandResponse response = new OpenCommandResponse();
-            response.setRetcode(500);
-            response.setMessage("获取失败: " + e.getMessage());
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("launchMode", "muip");
+            data.put("muipUrl", ConfigLoader.getConfig().getMuip().getApiUrl());
+            data.put("muipEnabled", ConfigLoader.getConfig().getMuip().isEnabled());
+            data.put("commandCmd", ConfigLoader.getConfig().getMuip().getCommandCmd());
+            data.put("commandParamName", ConfigLoader.getConfig().getMuip().getCommandParamName());
+            response.setRetcode(200);
+            response.setMessage("MUIP模式");
+            response.setData(data);
             return response;
         }
+        return openCommandService.getRunMode(serverUrl, token);
     }
 
-    private OpenCommandResponse sendRequest(String serverUrl, OpenCommandRequest request) {
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
+    private boolean isMuipMode() {
+        AppConfig config = ConfigLoader.getConfig();
+        boolean muipMode = "muip".equalsIgnoreCase(config.getLaunchMode())
+                || config.getGrasscutter().isMuipMode()
+                || config.getMuip().isEnabled();
+        logger.debug("当前游戏服务连接模式: {}", muipMode ? "muip" : "grasscutter");
+        return muipMode;
+    }
 
-            HttpEntity<OpenCommandRequest> entity = new HttpEntity<>(request, headers);
-
-            logger.info("=== 发送 Grasscutter OpenCommand 请求 ===");
-            logger.info("目标URL: {}", serverUrl);
-            logger.info("Action: {}", request.getAction());
-            logger.info("Token: {}", request.getToken() != null && !request.getToken().isEmpty() ? "已设置" : "未设置");
-            logger.info("Data: {}", request.getData());
-
-            ResponseEntity<OpenCommandResponse> response = restTemplate.exchange(
-                    serverUrl,
-                    HttpMethod.POST,
-                    entity,
-                    OpenCommandResponse.class
-            );
-
-            OpenCommandResponse result = response.getBody();
-            if (result != null) {
-                logger.info("=== 收到 Grasscutter OpenCommand 响应 ===");
-                logger.info("HTTP状态码: {}", response.getStatusCode());
-                logger.info("Retcode: {}", result.getRetcode());
-                logger.info("Message: {}", result.getMessage());
-                logger.info("Data: {}", result.getData());
-                logger.info("isSuccess: {}", result.isSuccess());
-            } else {
-                logger.warn("响应体为空，HTTP状态码: {}", response.getStatusCode());
-            }
-
-            return result;
-        } catch (RestClientException e) {
-            logger.error("=== Grasscutter OpenCommand 请求失败 ===");
-            logger.error("目标URL: {}", serverUrl);
-            logger.error("Action: {}", request.getAction());
-            logger.error("异常类型: {}", e.getClass().getName());
-            logger.error("异常消息: {}", e.getMessage());
-            logger.error("详细堆栈:", e);
-            throw e;
-        }
+    private OpenCommandResponse unsupportedInMuip(String message) {
+        OpenCommandResponse response = new OpenCommandResponse();
+        response.setRetcode(501);
+        response.setMessage(message);
+        return response;
     }
 }
