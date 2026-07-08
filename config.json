@@ -1,4 +1,5 @@
 {
+  "launchMode": "grasscutter",
   "frontend": {
     "port": 8080
   },
@@ -11,8 +12,8 @@
     "apiMode": "opencommand",
     "serverUrl": "http://127.0.0.1:1145",
     "apiPath": "/opencommand/api",
-    "consoleToken": "sh345Hfss34P4Ya99sb4e6MRUEGd5srm95i34hFBf2EMDPutOye",
-    "adminToken": "CHANGE_ME_TO_A_SECURE_RANDOM_STRING",
+    "consoleToken": "CHANGE_ME_CONSOLE_TOKEN",
+    "adminToken": "CHANGE_ME_ADMIN_TOKEN",
     "timeout": 10000
   },
   "muip": {
@@ -21,7 +22,7 @@
     "address": "127.0.0.1",
     "port": 21041,
     "region": "cn_gf01",
-    "sign": "CHANGE_ME_TO_MUIP_SIGN_KEY",
+    "sign": "CHANGE_ME_MUIP_SIGN",
     "timeout": 10000,
     "commandCmd": "1116",
     "commandParamName": "command",
