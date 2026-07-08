@@ -19,8 +19,8 @@ import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -29,14 +29,15 @@ import java.util.Map;
 /**
  * HK4E MUIP 服务。
  *
- * 逻辑参考 CokeSR/Hk4e-SDK:
- * - GET http(s)://address:port/api?参数&sign=sha256(排序后的非空参数 + signKey)
- * - 默认使用 cmd=1101 检查 MUIP 连通性/签名
- * - 普通 GM 指令会包装为可配置 commandCmd + commandParamName
+ * 与 ViaGenshin 的 console.go 保持一致：
+ * - 参数：cmd、uid、msg、region、ticket
+ * - 签名：sort(params as key=value) 后用 & 拼接，再追加 muip.sign，计算 SHA-256
+ * - 请求：GET {muipEndpoint}?{params}&sign={sha256}
  */
 @Service
 public class MuipService {
     private static final Logger logger = LoggerFactory.getLogger(MuipService.class);
+    private static final SecureRandom RANDOM = new SecureRandom();
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -57,19 +58,20 @@ public class MuipService {
     }
 
     public OpenCommandResponse executeCommand(String command) {
+        return executeCommand(command, null);
+    }
+
+    public OpenCommandResponse executeCommand(String command, String uid) {
         AppConfig.MuipConfig muip = ConfigLoader.getConfig().getMuip();
         if (isBlank(muip.getSign())) {
-            OpenCommandResponse response = new OpenCommandResponse();
-            response.setRetcode(500);
-            response.setMessage("MUIP sign为空，请在config.json中配置muip.sign");
-            return response;
+            return error(500, "MUIP sign为空，请在config.json中配置muip.sign");
         }
-        return sendRawMuip(buildCommandParams(command, muip));
+        return sendRawMuip(buildConsoleCommandParams(command, uid, muip));
     }
 
     /**
      * 直接发送 MUIP 参数。
-     * 例如：cmd=1101 或 cmd=1005&uid=xxx&title=xxx
+     * 例如：cmd=1101 或 cmd=1005&uid=xxx&msg=xxx
      */
     public OpenCommandResponse executeRawQuery(String query) {
         return sendRawMuip(parseRawMuipQuery(query));
@@ -78,13 +80,12 @@ public class MuipService {
     public OpenCommandResponse sendRawMuip(Map<String, String> params) {
         AppConfig.MuipConfig muip = ConfigLoader.getConfig().getMuip();
         try {
-            String sign = calculateMuipSign(params, muip.getSign());
-            String query = buildEncodedQuery(params);
-            String url = muip.getApiUrl() + "?" + query + "&sign=" + sign;
+            String query = buildViaGenshinStyleQuery(params, muip.getSign());
+            String url = muip.getApiUrl() + "?" + query;
 
             logger.info("=== 发送 HK4E MUIP 请求 ===");
             logger.info("MUIP URL: {}", maskSignInUrl(url));
-            logger.info("MUIP Params: {}", params);
+            logger.info("MUIP Params: {}", maskSensitiveParams(params));
 
             ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, HttpEntity.EMPTY, String.class);
             String body = response.getBody() == null ? "" : response.getBody().trim();
@@ -94,14 +95,11 @@ public class MuipService {
             return parseMuipResponse(body);
         } catch (Exception e) {
             logger.error("MUIP请求失败", e);
-            OpenCommandResponse response = new OpenCommandResponse();
-            response.setRetcode(500);
-            response.setMessage("MUIP请求失败: " + e.getMessage());
-            return response;
+            return error(500, "MUIP请求失败: " + e.getMessage());
         }
     }
 
-    private Map<String, String> buildCommandParams(String command, AppConfig.MuipConfig muip) {
+    private Map<String, String> buildConsoleCommandParams(String command, String uid, AppConfig.MuipConfig muip) {
         String trimmed = command == null ? "" : command.trim();
         if (trimmed.startsWith("muip:")) {
             return parseRawMuipQuery(trimmed.substring("muip:".length()));
@@ -112,12 +110,46 @@ public class MuipService {
 
         Map<String, String> params = new LinkedHashMap<>();
         params.put("cmd", muip.getCommandCmd());
-        params.put(muip.getCommandParamName(), command == null ? "" : command);
-        if (muip.isAppendRegion() && !isBlank(muip.getRegion())) {
-            params.put("region", muip.getRegion());
+        params.put("uid", resolveUid(uid, muip));
+        params.put("msg", command == null ? "" : command);
+        params.put("region", muip.getRegion());
+        params.put("ticket", randomTicketHex());
+        return params;
+    }
+
+    private String resolveUid(String uid, AppConfig.MuipConfig muip) {
+        if (!isBlank(uid)) {
+            return uid.trim();
         }
-        if (muip.isAppendTicket()) {
-            params.put("ticket", "GC-GM@" + Instant.now().getEpochSecond());
+        return String.valueOf(muip.getDefaultUid());
+    }
+
+    private String buildViaGenshinStyleQuery(Map<String, String> params, String signKey) {
+        ArrayList<String> values = new ArrayList<>();
+        for (Map.Entry<String, String> entry : params.entrySet()) {
+            if (entry.getKey() == null || entry.getValue() == null || entry.getValue().isEmpty()) {
+                continue;
+            }
+            values.add(entry.getKey() + "=" + entry.getValue());
+        }
+        if (!isBlank(signKey)) {
+            ArrayList<String> sortedForSign = new ArrayList<>(values);
+            Collections.sort(sortedForSign);
+            values.add("sign=" + sha256Hex(String.join("&", sortedForSign) + signKey));
+        }
+        // ViaGenshin 源码使用 strings.ReplaceAll(strings.Join(values, "&"), " ", "+")。
+        // 这里保持等价效果，同时对中文和特殊字符做 URL 编码，避免 Java HTTP 客户端拒绝非法 URL。
+        return buildEncodedQuery(parseKeyValueList(values));
+    }
+
+    private Map<String, String> parseKeyValueList(ArrayList<String> values) {
+        Map<String, String> params = new LinkedHashMap<>();
+        for (String value : values) {
+            int idx = value.indexOf('=');
+            if (idx < 0) {
+                continue;
+            }
+            params.put(value.substring(0, idx), value.substring(idx + 1));
         }
         return params;
     }
@@ -141,18 +173,6 @@ public class MuipService {
             }
         }
         return params;
-    }
-
-    private String calculateMuipSign(Map<String, String> params, String signKey) {
-        ArrayList<String> parts = new ArrayList<>();
-        for (Map.Entry<String, String> entry : params.entrySet()) {
-            if (entry.getKey() == null || entry.getValue() == null || entry.getValue().isEmpty()) {
-                continue;
-            }
-            parts.add(entry.getKey() + "=" + entry.getValue());
-        }
-        Collections.sort(parts);
-        return sha256Hex(String.join("&", parts) + signKey);
     }
 
     private String buildEncodedQuery(Map<String, String> params) {
@@ -188,7 +208,7 @@ public class MuipService {
             } else if (retcodeObj != null) {
                 retcode = Integer.parseInt(String.valueOf(retcodeObj));
             } else {
-                retcode = "succ".equalsIgnoreCase(msg) ? 200 : 500;
+                retcode = "succ".equalsIgnoreCase(msg) ? 0 : 500;
             }
 
             response.setRetcode(retcode);
@@ -196,11 +216,25 @@ public class MuipService {
             response.setData(map);
             return response;
         } catch (Exception e) {
-            response.setRetcode(200);
+            response.setRetcode(0);
             response.setMessage("MUIP返回非JSON响应");
             response.setData(body);
             return response;
         }
+    }
+
+    private String randomTicketHex() {
+        byte[] ticket = new byte[16];
+        RANDOM.nextBytes(ticket);
+        StringBuilder hex = new StringBuilder(ticket.length * 2);
+        for (byte b : ticket) {
+            String h = Integer.toHexString(0xff & b);
+            if (h.length() == 1) {
+                hex.append('0');
+            }
+            hex.append(h);
+        }
+        return hex.toString();
     }
 
     private String sha256Hex(String data) {
@@ -233,7 +267,22 @@ public class MuipService {
         return value == null || value.trim().isEmpty();
     }
 
+    private Map<String, String> maskSensitiveParams(Map<String, String> params) {
+        Map<String, String> masked = new LinkedHashMap<>(params);
+        if (masked.containsKey("sign")) {
+            masked.put("sign", "***");
+        }
+        return masked;
+    }
+
     private String maskSignInUrl(String url) {
         return url == null ? null : url.replaceAll("([?&]sign=)[^&]+", "$1***");
+    }
+
+    private OpenCommandResponse error(int retcode, String message) {
+        OpenCommandResponse response = new OpenCommandResponse();
+        response.setRetcode(retcode);
+        response.setMessage(message);
+        return response;
     }
 }
