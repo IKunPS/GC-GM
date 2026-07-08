@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.genshin.gm.config.AppConfig;
 import com.genshin.gm.config.ConfigLoader;
 import com.genshin.gm.model.OpenCommandResponse;
-import com.genshin.gm.util.CommandProcessor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,12 +27,10 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * HK4E MUIP 服务。
+ * HK4E MUIP HTTP 客户端。
  *
- * 与 ViaGenshin 的 console.go 保持一致：
- * - 参数：cmd、uid、msg、region、ticket
- * - 签名：sort(params as key=value) 后用 & 拼接，再追加 muip.sign，计算 SHA-256
- * - 请求：GET {muipEndpoint}?{params}&sign={sha256}
+ * 只负责 MUIP 参数、签名与 HTTP 请求；
+ * HK4E 指令文本统一由 Hk4eCommandService 生成/转换。
  */
 @Service
 public class MuipService {
@@ -42,14 +39,16 @@ public class MuipService {
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final Hk4eCommandService hk4eCommandService;
 
     @Autowired
-    public MuipService(RestTemplateBuilder builder) {
+    public MuipService(RestTemplateBuilder builder, Hk4eCommandService hk4eCommandService) {
         AppConfig.MuipConfig muip = ConfigLoader.getConfig().getMuip();
         this.restTemplate = builder
                 .setConnectTimeout(Duration.ofMillis(muip.getTimeout()))
                 .setReadTimeout(Duration.ofMillis(muip.getTimeout()))
                 .build();
+        this.hk4eCommandService = hk4eCommandService;
     }
 
     public OpenCommandResponse ping() {
@@ -70,10 +69,6 @@ public class MuipService {
         return sendRawMuip(buildConsoleCommandParams(command, uid, muip));
     }
 
-    /**
-     * 直接发送 MUIP 参数。
-     * 例如：cmd=1101 或 cmd=1005&uid=xxx&msg=xxx
-     */
     public OpenCommandResponse executeRawQuery(String query) {
         return sendRawMuip(parseRawMuipQuery(query));
     }
@@ -112,7 +107,7 @@ public class MuipService {
         Map<String, String> params = new LinkedHashMap<>();
         params.put("cmd", muip.getCommandCmd());
         params.put("uid", resolveUid(uid, muip));
-        params.put("msg", CommandProcessor.processMuipCommand(command == null ? "" : command));
+        params.put("msg", hk4eCommandService.normalizeCommand(command == null ? "" : command));
         params.put("region", muip.getRegion());
         params.put("ticket", randomTicketHex());
         return params;
@@ -138,8 +133,6 @@ public class MuipService {
             Collections.sort(sortedForSign);
             values.add("sign=" + sha256Hex(String.join("&", sortedForSign) + signKey));
         }
-        // ViaGenshin 源码使用 strings.ReplaceAll(strings.Join(values, "&"), " ", "+")。
-        // 这里保持等价效果，同时对中文和特殊字符做 URL 编码，避免 Java HTTP 客户端拒绝非法 URL。
         return buildEncodedQuery(parseKeyValueList(values));
     }
 
@@ -212,7 +205,6 @@ public class MuipService {
                 retcode = "succ".equalsIgnoreCase(msg) ? 0 : 500;
             }
 
-            // OpenCommandResponse.isSuccess 兼容 0/200，但旧 ProtoApiController 的执行响应用 200 判断。
             response.setRetcode(retcode == 0 ? 200 : retcode);
             response.setMessage(msg.isBlank() ? "MUIP返回成功" : msg);
             response.setData(map);
