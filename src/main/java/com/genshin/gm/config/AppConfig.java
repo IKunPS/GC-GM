@@ -6,11 +6,25 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
  * 应用配置类
  */
 public class AppConfig {
+    /**
+     * 游戏服务连接模式：
+     * - grasscutter: 连接 Grasscutter OpenCommand
+     * - muip: 连接 HK4E MUIP
+     */
+    private String launchMode = "grasscutter";
     private FrontendConfig frontend;
     private GrasscutterConfig grasscutter;
     private MuipConfig muip;
     private MySQLConfig mysql;
     private AppDownloadConfig app;
+
+    public String getLaunchMode() {
+        return launchMode;
+    }
+
+    public void setLaunchMode(String launchMode) {
+        this.launchMode = launchMode;
+    }
 
     public FrontendConfig getFrontend() {
         return frontend;
@@ -57,29 +71,12 @@ public class AppConfig {
         private int port = 8080;
         private boolean autoOpen = true;
 
-        public String getHost() {
-            return host;
-        }
-
-        public void setHost(String host) {
-            this.host = host;
-        }
-
-        public int getPort() {
-            return port;
-        }
-
-        public void setPort(int port) {
-            this.port = port;
-        }
-
-        public boolean isAutoOpen() {
-            return autoOpen;
-        }
-
-        public void setAutoOpen(boolean autoOpen) {
-            this.autoOpen = autoOpen;
-        }
+        public String getHost() { return host; }
+        public void setHost(String host) { this.host = host; }
+        public int getPort() { return port; }
+        public void setPort(int port) { this.port = port; }
+        public boolean isAutoOpen() { return autoOpen; }
+        public void setAutoOpen(boolean autoOpen) { this.autoOpen = autoOpen; }
 
         @JsonIgnore
         public String getUrl() {
@@ -89,8 +86,7 @@ public class AppConfig {
 
     public static class GrasscutterConfig {
         /**
-         * opencommand: 使用 Grasscutter OpenCommand POST JSON
-         * muip: 使用 HK4E MUIP GET + SHA256 签名
+         * 兼容旧配置。新配置优先使用 AppConfig.launchMode。
          */
         private String apiMode = "opencommand";
         private String serverUrl = "http://127.0.0.1:443";
@@ -99,53 +95,18 @@ public class AppConfig {
         private String adminToken = "";
         private int timeout = 10000;
 
-        public String getApiMode() {
-            return apiMode;
-        }
-
-        public void setApiMode(String apiMode) {
-            this.apiMode = apiMode;
-        }
-
-        public String getServerUrl() {
-            return serverUrl;
-        }
-
-        public void setServerUrl(String serverUrl) {
-            this.serverUrl = serverUrl;
-        }
-
-        public String getApiPath() {
-            return apiPath;
-        }
-
-        public void setApiPath(String apiPath) {
-            this.apiPath = apiPath;
-        }
-
-        public String getConsoleToken() {
-            return consoleToken;
-        }
-
-        public void setConsoleToken(String consoleToken) {
-            this.consoleToken = consoleToken;
-        }
-
-        public String getAdminToken() {
-            return adminToken;
-        }
-
-        public void setAdminToken(String adminToken) {
-            this.adminToken = adminToken;
-        }
-
-        public int getTimeout() {
-            return timeout;
-        }
-
-        public void setTimeout(int timeout) {
-            this.timeout = timeout;
-        }
+        public String getApiMode() { return apiMode; }
+        public void setApiMode(String apiMode) { this.apiMode = apiMode; }
+        public String getServerUrl() { return serverUrl; }
+        public void setServerUrl(String serverUrl) { this.serverUrl = serverUrl; }
+        public String getApiPath() { return apiPath; }
+        public void setApiPath(String apiPath) { this.apiPath = apiPath; }
+        public String getConsoleToken() { return consoleToken; }
+        public void setConsoleToken(String consoleToken) { this.consoleToken = consoleToken; }
+        public String getAdminToken() { return adminToken; }
+        public void setAdminToken(String adminToken) { this.adminToken = adminToken; }
+        public int getTimeout() { return timeout; }
+        public void setTimeout(int timeout) { this.timeout = timeout; }
 
         @JsonIgnore
         public String getFullUrl() {
@@ -167,103 +128,38 @@ public class AppConfig {
         private String sign = "";
         private int timeout = 10000;
         /**
-         * MUIP 指令执行 cmd。不同 hk4e/gio 服务端可能不同，因此做成配置项。
+         * MUIP 执行 GM 指令的 cmd，不同 HK4E/GIO 端可能不同。
          */
         private String commandCmd = "1116";
         /**
-         * MUIP 指令文本参数名。若你的服务端使用 cmdline/command/msg 等，可在 config.json 修改。
+         * GM 指令文本参数名，不同 HK4E/GIO 端可能是 command/cmdline/msg 等。
          */
         private String commandParamName = "command";
         private boolean appendRegion = true;
         private boolean appendTicket = true;
 
-        public boolean isEnabled() {
-            return enabled;
-        }
-
-        public void setEnabled(boolean enabled) {
-            this.enabled = enabled;
-        }
-
-        public boolean isSsl() {
-            return ssl;
-        }
-
-        public void setSsl(boolean ssl) {
-            this.ssl = ssl;
-        }
-
-        public String getAddress() {
-            return address;
-        }
-
-        public void setAddress(String address) {
-            this.address = address;
-        }
-
-        public int getPort() {
-            return port;
-        }
-
-        public void setPort(int port) {
-            this.port = port;
-        }
-
-        public String getRegion() {
-            return region;
-        }
-
-        public void setRegion(String region) {
-            this.region = region;
-        }
-
-        public String getSign() {
-            return sign;
-        }
-
-        public void setSign(String sign) {
-            this.sign = sign;
-        }
-
-        public int getTimeout() {
-            return timeout;
-        }
-
-        public void setTimeout(int timeout) {
-            this.timeout = timeout;
-        }
-
-        public String getCommandCmd() {
-            return commandCmd;
-        }
-
-        public void setCommandCmd(String commandCmd) {
-            this.commandCmd = commandCmd;
-        }
-
-        public String getCommandParamName() {
-            return commandParamName;
-        }
-
-        public void setCommandParamName(String commandParamName) {
-            this.commandParamName = commandParamName;
-        }
-
-        public boolean isAppendRegion() {
-            return appendRegion;
-        }
-
-        public void setAppendRegion(boolean appendRegion) {
-            this.appendRegion = appendRegion;
-        }
-
-        public boolean isAppendTicket() {
-            return appendTicket;
-        }
-
-        public void setAppendTicket(boolean appendTicket) {
-            this.appendTicket = appendTicket;
-        }
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public boolean isSsl() { return ssl; }
+        public void setSsl(boolean ssl) { this.ssl = ssl; }
+        public String getAddress() { return address; }
+        public void setAddress(String address) { this.address = address; }
+        public int getPort() { return port; }
+        public void setPort(int port) { this.port = port; }
+        public String getRegion() { return region; }
+        public void setRegion(String region) { this.region = region; }
+        public String getSign() { return sign; }
+        public void setSign(String sign) { this.sign = sign; }
+        public int getTimeout() { return timeout; }
+        public void setTimeout(int timeout) { this.timeout = timeout; }
+        public String getCommandCmd() { return commandCmd; }
+        public void setCommandCmd(String commandCmd) { this.commandCmd = commandCmd; }
+        public String getCommandParamName() { return commandParamName; }
+        public void setCommandParamName(String commandParamName) { this.commandParamName = commandParamName; }
+        public boolean isAppendRegion() { return appendRegion; }
+        public void setAppendRegion(boolean appendRegion) { this.appendRegion = appendRegion; }
+        public boolean isAppendTicket() { return appendTicket; }
+        public void setAppendTicket(boolean appendTicket) { this.appendTicket = appendTicket; }
 
         @JsonIgnore
         public String getBaseUrl() {
@@ -296,50 +192,21 @@ public class AppConfig {
         private String username = "root";
         private String password = "";
 
-        public String getHost() {
-            return host;
-        }
-
-        public void setHost(String host) {
-            this.host = host;
-        }
-
-        public int getPort() {
-            return port;
-        }
-
-        public void setPort(int port) {
-            this.port = port;
-        }
-
-        public String getDatabase() {
-            return database;
-        }
-
-        public void setDatabase(String database) {
-            this.database = database;
-        }
-
-        public String getUsername() {
-            return username;
-        }
-
-        public void setUsername(String username) {
-            this.username = username;
-        }
-
-        public String getPassword() {
-            return password;
-        }
-
-        public void setPassword(String password) {
-            this.password = password;
-        }
+        public String getHost() { return host; }
+        public void setHost(String host) { this.host = host; }
+        public int getPort() { return port; }
+        public void setPort(int port) { this.port = port; }
+        public String getDatabase() { return database; }
+        public void setDatabase(String database) { this.database = database; }
+        public String getUsername() { return username; }
+        public void setUsername(String username) { this.username = username; }
+        public String getPassword() { return password; }
+        public void setPassword(String password) { this.password = password; }
 
         @JsonIgnore
         public String getJdbcUrl() {
             return "jdbc:mysql://" + host + ":" + port + "/" + database
-                    + "?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8&useUnicode=true";
+                    + "?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8&characterEncoding=UTF-8&useUnicode=true";
         }
     }
 }
