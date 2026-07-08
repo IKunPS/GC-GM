@@ -103,8 +103,7 @@ public class GrasscutterService {
     private boolean isMuipMode() {
         AppConfig config = ConfigLoader.getConfig();
         boolean muipMode = "muip".equalsIgnoreCase(config.getLaunchMode())
-                || config.getGrasscutter().isMuipMode()
-                || config.getMuip().isEnabled();
+                || config.getGrasscutter().isMuipMode();
         logger.debug("当前游戏服务连接模式: {}", muipMode ? "muip" : "grasscutter");
         return muipMode;
     }
