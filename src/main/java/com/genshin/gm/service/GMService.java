@@ -15,7 +15,7 @@ import java.util.Map;
  * GM 指令生成服务。
  *
  * grasscutter 模式：生成 Grasscutter/OpenCommand 格式，例如 /give 201 x1。
- * muip 模式：生成 ViaGenshin/GIO 控制台文本格式，例如 give 201 1。
+ * muip 模式：生成 HK4E/ViaGenshin 控制台文本格式，例如 item add 201 1。
  *            UID 不写进指令文本，由 MUIP 参数 uid 单独传递。
  */
 @Service
@@ -86,13 +86,13 @@ public class GMService {
             return "错误：参数无效";
         }
         if (isMuipMode()) {
-            return String.format("give %d %d", itemId, quantity);
+            return String.format("item add %d %d", itemId, quantity);
         }
         return String.format("/give %d x%d", itemId, quantity);
     }
 
     /**
-     * 生成任务添加指令
+     * 生成任务添加/接取指令
      * @param questId 任务ID
      * @return GM 指令
      */
@@ -101,7 +101,7 @@ public class GMService {
             return "错误：任务ID无效";
         }
         if (isMuipMode()) {
-            return String.format("quest add %d", questId);
+            return String.format("quest accept %d", questId);
         }
         return String.format("/quest add %d", questId);
     }
