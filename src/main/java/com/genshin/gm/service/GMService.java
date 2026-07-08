@@ -14,9 +14,8 @@ import java.util.Map;
 /**
  * GM 指令生成服务。
  *
- * grasscutter 模式：生成 Grasscutter/OpenCommand 格式，例如 /give 201 x1。
- * muip 模式：生成 HK4E/ViaGenshin 控制台文本格式，例如 item add 201 1。
- *            UID 不写进指令文本，由 MUIP 参数 uid 单独传递。
+ * Grasscutter 指令在本类生成；
+ * HK4E/MUIP 指令统一交给 Hk4eCommandService。
  */
 @Service
 public class GMService {
@@ -24,14 +23,14 @@ public class GMService {
     @Autowired
     private DataLoader dataLoader;
 
+    @Autowired
+    private Hk4eCommandService hk4eCommandService;
+
     private Map<Integer, String> itemsMap;
     private Map<Integer, String> weaponsMap;
     private Map<Integer, String> avatarsMap;
     private Map<Integer, String> questsMap;
 
-    /**
-     * 初始化：加载所有数据
-     */
     @PostConstruct
     public void init() {
         dataLoader.validateDataDirectory();
@@ -47,76 +46,48 @@ public class GMService {
         System.out.println("任务数量: " + questsMap.size());
     }
 
-    /**
-     * 获取物品列表
-     */
     public List<GameData> getItems() {
         return dataLoader.loadDataAsList("Item.txt");
     }
 
-    /**
-     * 获取武器列表
-     */
     public List<GameData> getWeapons() {
         return dataLoader.loadDataAsList("Weapon.txt");
     }
 
-    /**
-     * 获取角色列表
-     */
     public List<GameData> getAvatars() {
         return dataLoader.loadDataAsList("Avatar.txt");
     }
 
-    /**
-     * 获取任务列表
-     */
     public List<GameData> getQuests() {
         return dataLoader.loadDataAsList("Quest.txt");
     }
 
-    /**
-     * 生成物品给予指令
-     * @param itemId 物品ID
-     * @param quantity 数量
-     * @return GM 指令
-     */
     public String generateGiveCommand(Integer itemId, Integer quantity) {
         if (itemId == null || quantity == null || quantity <= 0) {
             return "错误：参数无效";
         }
         if (isMuipMode()) {
-            return String.format("item add %d %d", itemId, quantity);
+            return hk4eCommandService.generateItemAddCommand(itemId, quantity);
         }
         return String.format("/give %d x%d", itemId, quantity);
     }
 
-    /**
-     * 生成任务添加/接取指令
-     * @param questId 任务ID
-     * @return GM 指令
-     */
     public String generateQuestAddCommand(Integer questId) {
         if (questId == null) {
             return "错误：任务ID无效";
         }
         if (isMuipMode()) {
-            return String.format("quest accept %d", questId);
+            return hk4eCommandService.generateQuestAcceptCommand(questId);
         }
         return String.format("/quest add %d", questId);
     }
 
-    /**
-     * 生成任务完成指令
-     * @param questId 任务ID
-     * @return GM 指令
-     */
     public String generateQuestFinishCommand(Integer questId) {
         if (questId == null) {
             return "错误：任务ID无效";
         }
         if (isMuipMode()) {
-            return String.format("quest finish %d", questId);
+            return hk4eCommandService.generateQuestFinishCommand(questId);
         }
         return String.format("/quest finish %d", questId);
     }
