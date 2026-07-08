@@ -80,6 +80,11 @@ public class AppConfig {
 
     public static class MuipConfig {
         private boolean enabled = false;
+        /**
+         * 可直接配置完整 MUIP API 地址，例如 http://127.0.0.1:21041/api。
+         * 为空时使用 ssl/address/port 自动拼接。
+         */
+        private String apiUrl = "";
         private boolean ssl = false;
         private String address = "127.0.0.1";
         private int port = 21041;
@@ -104,6 +109,8 @@ public class AppConfig {
 
         public boolean isEnabled() { return enabled; }
         public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public String getApiUrlRaw() { return apiUrl; }
+        public void setApiUrl(String apiUrl) { this.apiUrl = apiUrl; }
         public boolean isSsl() { return ssl; }
         public void setSsl(boolean ssl) { this.ssl = ssl; }
         public String getAddress() { return address; }
@@ -131,7 +138,12 @@ public class AppConfig {
         public String getBaseUrl() { return (ssl ? "https://" : "http://") + address + ":" + port; }
 
         @JsonIgnore
-        public String getApiUrl() { return getBaseUrl() + "/api"; }
+        public String getApiUrl() {
+            if (apiUrl != null && !apiUrl.trim().isEmpty()) {
+                return apiUrl.trim();
+            }
+            return getBaseUrl() + "/api";
+        }
     }
 
     public static class AppDownloadConfig {
