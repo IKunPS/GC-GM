@@ -8,6 +8,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 public class AppConfig {
     private FrontendConfig frontend;
     private GrasscutterConfig grasscutter;
+    private MuipConfig muip;
     private MySQLConfig mysql;
     private AppDownloadConfig app;
 
@@ -25,6 +26,14 @@ public class AppConfig {
 
     public void setGrasscutter(GrasscutterConfig grasscutter) {
         this.grasscutter = grasscutter;
+    }
+
+    public MuipConfig getMuip() {
+        return muip != null ? muip : new MuipConfig();
+    }
+
+    public void setMuip(MuipConfig muip) {
+        this.muip = muip;
     }
 
     public MySQLConfig getMysql() {
@@ -79,11 +88,24 @@ public class AppConfig {
     }
 
     public static class GrasscutterConfig {
+        /**
+         * opencommand: 使用 Grasscutter OpenCommand POST JSON
+         * muip: 使用 HK4E MUIP GET + SHA256 签名
+         */
+        private String apiMode = "opencommand";
         private String serverUrl = "http://127.0.0.1:443";
         private String apiPath = "/opencommand/api";
         private String consoleToken = "";
         private String adminToken = "";
         private int timeout = 10000;
+
+        public String getApiMode() {
+            return apiMode;
+        }
+
+        public void setApiMode(String apiMode) {
+            this.apiMode = apiMode;
+        }
 
         public String getServerUrl() {
             return serverUrl;
@@ -128,6 +150,129 @@ public class AppConfig {
         @JsonIgnore
         public String getFullUrl() {
             return serverUrl + apiPath;
+        }
+
+        @JsonIgnore
+        public boolean isMuipMode() {
+            return "muip".equalsIgnoreCase(apiMode);
+        }
+    }
+
+    public static class MuipConfig {
+        private boolean enabled = false;
+        private boolean ssl = false;
+        private String address = "127.0.0.1";
+        private int port = 21041;
+        private String region = "cn_gf01";
+        private String sign = "";
+        private int timeout = 10000;
+        /**
+         * MUIP 指令执行 cmd。不同 hk4e/gio 服务端可能不同，因此做成配置项。
+         */
+        private String commandCmd = "1116";
+        /**
+         * MUIP 指令文本参数名。若你的服务端使用 cmdline/command/msg 等，可在 config.json 修改。
+         */
+        private String commandParamName = "command";
+        private boolean appendRegion = true;
+        private boolean appendTicket = true;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public boolean isSsl() {
+            return ssl;
+        }
+
+        public void setSsl(boolean ssl) {
+            this.ssl = ssl;
+        }
+
+        public String getAddress() {
+            return address;
+        }
+
+        public void setAddress(String address) {
+            this.address = address;
+        }
+
+        public int getPort() {
+            return port;
+        }
+
+        public void setPort(int port) {
+            this.port = port;
+        }
+
+        public String getRegion() {
+            return region;
+        }
+
+        public void setRegion(String region) {
+            this.region = region;
+        }
+
+        public String getSign() {
+            return sign;
+        }
+
+        public void setSign(String sign) {
+            this.sign = sign;
+        }
+
+        public int getTimeout() {
+            return timeout;
+        }
+
+        public void setTimeout(int timeout) {
+            this.timeout = timeout;
+        }
+
+        public String getCommandCmd() {
+            return commandCmd;
+        }
+
+        public void setCommandCmd(String commandCmd) {
+            this.commandCmd = commandCmd;
+        }
+
+        public String getCommandParamName() {
+            return commandParamName;
+        }
+
+        public void setCommandParamName(String commandParamName) {
+            this.commandParamName = commandParamName;
+        }
+
+        public boolean isAppendRegion() {
+            return appendRegion;
+        }
+
+        public void setAppendRegion(boolean appendRegion) {
+            this.appendRegion = appendRegion;
+        }
+
+        public boolean isAppendTicket() {
+            return appendTicket;
+        }
+
+        public void setAppendTicket(boolean appendTicket) {
+            this.appendTicket = appendTicket;
+        }
+
+        @JsonIgnore
+        public String getBaseUrl() {
+            return (ssl ? "https://" : "http://") + address + ":" + port;
+        }
+
+        @JsonIgnore
+        public String getApiUrl() {
+            return getBaseUrl() + "/api";
         }
     }
 
